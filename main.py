@@ -3,11 +3,12 @@ import os
 import random
 import datetime
 import secrets
+import json
 
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from keras.models import load_model
@@ -40,14 +41,14 @@ async def upload_images(in_files: List[UploadFile] = File(...)):
     # 업로드된 파일 처리
     for file in in_files:
         current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        saved_file_name = f"{current_time}_{secrets.token_hex(8)}"
+        saved_file_name = f"{current_time}_{secrets.token_hex(8)}.png"  # 파일 확장자 추가
         file_location = os.path.join(IMG_DIR, saved_file_name)
 
         with open(file_location, "wb+") as file_object:
             file_object.write(file.file.read())
         
         # 저장된 이미지 경로로 AI 처리로 리다이렉션
-        return RedirectResponse(url=f"/ai?img={file_location}", status_code=status.HTTP_303_SEE_OTHER)
+        return JSONResponse(content={"url": f"/ai?img={file_location}"}, status_code=status.HTTP_200_OK)
 
 @app.get("/ai")
 async def analyze_image(request: Request, img: str):
@@ -59,6 +60,7 @@ async def analyze_image(request: Request, img: str):
     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
     # 감지된 각 얼굴에 대해 감정 분석
+    expression_label = "Neutral"  # 기본값 설정
     for (x, y, w, h) in faces:
         face_roi = gray[y:y+h, x:x+w]
         face_roi = cv2.resize(face_roi, (64, 64)) / 255.0  # 크기 조정 및 정규화
