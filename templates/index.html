@@ -25,17 +25,22 @@
             margin-bottom: 20px;
             text-align: center;
         }
-        form {
-            background-color: #ffffff;
-            padding: 20px;
+        #video {
+            border: 1px solid #ccc;
             border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            text-align: center;
+            margin-bottom: 20px;
         }
-        input[type="file"] {
-            margin: 10px 0;
+        #canvas {
+            display: none;
         }
-        input[type="submit"] {
+        img {
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin: 20px 0;
+            max-width: 640px;
+            max-height: 480px;
+        }
+        button {
             padding: 10px 20px;
             border: none;
             border-radius: 5px;
@@ -43,18 +48,88 @@
             color: white;
             font-size: 18px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.3s;
+            margin-top: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
-        input[type="submit"]:hover {
+        button:hover {
             background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        #upload {
+            display: none; /* 초기 상태에서 숨김 */
         }
     </style>
 </head>
 <body>
     <h1>플레이리스트 추천기</h1>
-    <form action="/upload-images/" enctype="multipart/form-data" method="post">
-        <input name="in_files" type="file" multiple accept="image/*" required>
-        <input type="submit" value="업로드">
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <img id="photo" style="display: none;" />
+    <button id="capture">사진 찍기</button>
+    <button id="upload" style="display: none;">업로드</button>
+
+    <form id="uploadForm" action="/upload-images/" method="post" enctype="multipart/form-data" style="display: none;">
+        <input type="hidden" name="in_files" id="hiddenInput">
     </form>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+        const captureButton = document.getElementById('capture');
+        const uploadButton = document.getElementById('upload');
+        const photo = document.getElementById('photo');
+
+        let stream;
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(s => {
+                stream = s;
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("웹캠을 사용할 수 없습니다: ", err);
+            });
+
+        captureButton.addEventListener('click', () => {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+                const file = new File([blob], 'capture.png', { type: 'image/png' });
+                const formData = new FormData();
+                formData.append('in_files', file);
+
+                // 업로드 버튼 보이기
+                uploadButton.style.display = 'inline';
+
+                stream.getTracks().forEach(track => track.stop());
+                video.style.display = 'none'; // 비디오 요소 숨기기
+                photo.src = URL.createObjectURL(blob); // 캡처한 이미지를 img 요소에 표시
+                photo.style.display = 'block'; // img 요소 보이기
+
+                // 업로드 버튼 클릭 시 폼 전송
+                uploadButton.addEventListener('click', () => {
+                    fetch('/upload-images/', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (result.url) {
+                            window.location.href = result.url;
+                        } else {
+                            console.error('응답에 url이 없습니다:', result);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('업로드 실패:', error);
+                    });
+                });
+            });
+        });
+    </script>
 </body>
 </html>
